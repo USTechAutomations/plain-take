@@ -1,5 +1,4 @@
 User-agent: *
 Allow: /
 Disallow: /notes/
-Disallow: /thanks.html
-Sitemap: https://ustechautomations.github.io/plain-take/sitemap.xml
+Sitemap: https://ustechautomations.github.io/plain-takesitemap.xml
