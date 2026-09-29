@@ -42,6 +42,12 @@ a { color: #1e2a24; }
 .note { border-top: 1px solid #1e2a24; padding-top: 0.4rem; margin-top: 0.6rem; }
 .quiet { font-size: 0.95rem; }
 ol, ul { padding-left: 1.2rem; }
+label { display: block; margin: 0.8rem 0 0.2rem; font-weight: 700; }
+textarea, input, select { display: block; width: 100%; max-width: 100%; font: inherit; color: #1e2a24; background: #fff; border: 1px solid #1e2a24; padding: 0.5rem; }
+textarea:focus, input:focus, select:focus, button:focus { outline: 2px solid #1e2a24; outline-offset: 3px; }
+button.button { border: 0; font: inherit; font-weight: 700; cursor: pointer; }
+button.button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.secondary { background: #f4f0e6; color: #1e2a24; border: 2px solid #1e2a24; }
 </style>
 </head>
 <body>
@@ -70,7 +76,134 @@ ol, ul { padding-left: 1.2rem; }
 <h2>Adjusting your eyeline when reading solo</h2>
 <p>Whether you use a recording or note cards, keep your eyeline fixed at one mark near the lens for the whole scene, the same way you would with a live reader standing there.</p>
 <p>A shifting eyeline is one of the fastest ways a solo tape starts to look unfocused, even when the performance itself is strong.</p>
+<h2>Free line reader</h2>
+<p>Paste the other character's lines below, one line on each row. Press the button and your browser reads each line aloud in its own built-in voice, then waits so you can say yours. Everything stays in this page. Nothing you type is sent anywhere.</p>
+<div class="tool">
+<label for="reader-lines">The other character's lines, one per row</label>
+<textarea id="reader-lines" rows="7"></textarea>
+<label for="reader-pause">Pause after each line, in seconds</label>
+<input id="reader-pause" type="number" min="0" max="30" value="4">
+<label for="reader-voice">Voice</label>
+<select id="reader-voice"></select>
+<button type="button" id="reader-start" class="button">Read the lines aloud</button>
+<button type="button" id="reader-stop" class="button secondary">Stop</button>
+<p id="reader-status" class="quiet" role="status" aria-live="polite"></p>
+<noscript><p class="quiet">The line reader needs JavaScript switched on in your browser.</p></noscript>
+</div>
+<script>
+(function () {
+  var box = document.getElementById("reader-lines");
+  var pauseBox = document.getElementById("reader-pause");
+  var voiceBox = document.getElementById("reader-voice");
+  var startBtn = document.getElementById("reader-start");
+  var stopBtn = document.getElementById("reader-stop");
+  var statusEl = document.getElementById("reader-status");
+  var synth = window.speechSynthesis;
+  var run = 0;
+  var timer = null;
+  var current = null;
+  var voices = [];
+
+  var NO_VOICE = "This browser has no built-in voice, so the line reader cannot speak here. Try this page in another browser, or use a recorded reader track or note cards instead, as described above.";
+
+  function say(text) { statusEl.textContent = text; }
+
+  if (!synth || !window.SpeechSynthesisUtterance) {
+    startBtn.disabled = true;
+    stopBtn.disabled = true;
+    say(NO_VOICE);
+    return;
+  }
+
+  function hasVoice() { return synth.getVoices().length > 0; }
+
+  function loadVoices() {
+    var keep = voiceBox.value;
+    voices = synth.getVoices();
+    voiceBox.innerHTML = "";
+    var first = document.createElement("option");
+    first.value = "-1";
+    first.textContent = "Browser default";
+    voiceBox.appendChild(first);
+    for (var i = 0; i < voices.length; i++) {
+      var opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = voices[i].name + " (" + voices[i].lang + ")";
+      voiceBox.appendChild(opt);
+    }
+    if (keep) { voiceBox.value = keep; }
+  }
+  loadVoices();
+  if (synth.onvoiceschanged !== undefined) {
+    synth.onvoiceschanged = function () {
+      loadVoices();
+      if (hasVoice() && statusEl.textContent === NO_VOICE) { say(""); }
+    };
+  }
+  setTimeout(function () {
+    if (!hasVoice() && statusEl.textContent === "") { say(NO_VOICE); }
+  }, 1500);
+
+  function stop() {
+    run += 1;
+    if (timer) { clearTimeout(timer); timer = null; }
+    synth.cancel();
+  }
+
+  function readAll() {
+    stop();
+    var mine = run;
+    var lines = box.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+    if (lines.length === 0) {
+      say("Paste at least one line first.");
+      box.focus();
+      return;
+    }
+    if (!hasVoice()) {
+      say(NO_VOICE);
+      return;
+    }
+    var pause = Number(pauseBox.value);
+    if (isNaN(pause) || pause < 0) { pause = 0; }
+    if (pause > 30) { pause = 30; }
+    var index = 0;
+    function next() {
+      if (mine !== run) { return; }
+      if (index >= lines.length) {
+        say("Finished. Press the button to run it again.");
+        return;
+      }
+      var u = new SpeechSynthesisUtterance(lines[index]);
+      var v = Number(voiceBox.value);
+      if (v >= 0 && voices[v]) { u.voice = voices[v]; u.lang = voices[v].lang; }
+      say("Reading line " + (index + 1) + " of " + lines.length + ".");
+      var done = false;
+      function after() {
+        if (done || mine !== run) { return; }
+        done = true;
+        index += 1;
+        say("Your turn. Line " + index + " of " + lines.length + " has been read.");
+        timer = setTimeout(next, pause * 1000);
+      }
+      u.onend = after;
+      u.onerror = function () {
+        if (done || mine !== run) { return; }
+        done = true;
+        run += 1;
+        say("The browser could not speak line " + (index + 1) + " of " + lines.length + ". Try this page in another browser.");
+      };
+      current = u;
+      synth.speak(u);
+    }
+    next();
+  }
+
+  startBtn.addEventListener("click", readAll);
+  stopBtn.addEventListener("click", function () { stop(); say("Stopped."); });
+})();
+</script>
 <p>If you want a second, specific set of eyes on the tape itself once it is recorded, Plain Take writes notes on one self-tape for $12, delivered on a private page. <a href="index.html">See how it works</a>.</p>
+<p class="quiet">These notes are produced by an AI system and checked automatically before delivery. No person reviews them. They are not from a casting director. They do not promise a booking.</p>
 <h2>Related guides</h2>
 <ul>
 <li><a href="self-tape-checklist.html">Self-tape checklist</a></li>
@@ -78,6 +211,10 @@ ol, ul { padding-left: 1.2rem; }
 <li><a href="self-tape-lighting-and-sound-at-home.html">Lighting and sound at home</a></li>
 <li><a href="how-to-slate-a-self-tape.html">How to slate a self-tape</a></li>
 <li><a href="self-tape-feedback-what-to-ask.html">Getting useful feedback</a></li>
+<li><a href="ai-self-tape-feedback.html">What AI feedback can and cannot judge</a></li>
+<li><a href="self-tape-framing-and-eyeline.html">Framing and eyeline (free printable guide)</a></li>
+<li><a href="what-casting-directors-look-for-in-self-tapes.html">What shows in the first ten seconds of a tape</a></li>
+<li><a href="self-tape-coach-or-written-notes.html">Self-tape coach or written notes</a></li>
 </ul>
 <p><a href="index.html">Back to Plain Take</a></p>
 </main>
