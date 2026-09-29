@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plain Take — your notes are on the way</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #f4f0e6;
+  color: #1e2a24;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+main { max-width: 38rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+h1 { font-size: 1.8rem; line-height: 1.2; margin: 0.4rem 0 1rem; }
+p { margin: 0.4rem 0; }
+a { color: #1e2a24; }
+.brand { font-weight: 700; margin: 0; }
+.quiet { font-size: 0.95rem; }
+</style>
+</head>
+<body>
+<main>
+<p class="brand">Plain Take</p>
+<h1>Your notes are on the way</h1>
+<p id="status">Payment received. Your notes will appear on this page within 24 hours.</p>
+<p id="ready"></p>
+<p class="quiet">These notes are produced by an AI system and reviewed for quality. They are not from a casting director. They do not promise a booking.</p>
+</main>
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var raw = params.get("s");
+  var s = raw === null ? "" : raw;
+  var status = document.getElementById("status");
+  var ready = document.getElementById("ready");
+  if (!/^[A-Za-z0-9_]{8,80}$/.test(s)) {
+    status.textContent = "This link does not have a valid payment reference. Nothing will be checked.";
+    return;
+  }
+  function look() {
+    var path = "notes/" + s + ".html";
+    fetch(path, { method: "GET", cache: "no-store" }).then(function (res) {
+      if (!res.ok) {
+        return;
+      }
+      while (ready.firstChild) {
+        ready.removeChild(ready.firstChild);
+      }
+      var link = document.createElement("a");
+      link.href = path;
+      link.textContent = "Your notes are ready.";
+      ready.appendChild(link);
+    }).catch(function () {
+      return;
+    });
+  }
+  look();
+  window.setInterval(look, 60000);
+})();
+</script>
+</body>
+</html>
